@@ -1,5 +1,4 @@
 <?php
-// includes/sidebar_prof.php — v3
 $menu = [
     ['dashboard',        'Tableau de bord',    'dashboard',       '/professeur/dashboard.php'],
     ['emplois_du_temps', 'Mon emploi du temps','calendar_month',  '/professeur/emplois_du_temps.php'],

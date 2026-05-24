@@ -1,10 +1,4 @@
-// ============================================================
-// EduSchedule — main.js (v2.1)
-// Navigation instantanée — aucune animation de page.
-// Seule la page de chargement initiale est animée (CSS).
-// ============================================================
 
-// ── Page Loader (premier chargement uniquement) ───────────
 (function() {
   const loader = document.getElementById('pageLoader');
   if (!loader) return;

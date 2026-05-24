@@ -1,5 +1,4 @@
 <?php
-// admin/modifier_edt.php — Modification manuelle d'un créneau EDT
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
@@ -21,7 +20,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Vérifier conflits
     $errors = [];
-    // Salle occupée sur ce créneau (autre que cet enregistrement)
     $chkS = $pdo->prepare("SELECT id FROM emplois_du_temps WHERE version=? AND id_creneau=? AND id_salle=? AND id!=? LIMIT 1");
     $chkS->execute([$version,$idCreneau,$idSalle,$id]);
     if ($chkS->fetch()) $errors[] = getBusinessError('salle_occupied');

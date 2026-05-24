@@ -1,5 +1,4 @@
 <?php
-// admin/niveaux.php — CRUD Niveaux scolaires
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';

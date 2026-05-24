@@ -1,7 +1,4 @@
 <?php
-// ============================================================
-// includes/header.php — Head HTML commun + Topbar
-// ============================================================
 if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/functions.php';
@@ -14,7 +11,6 @@ $activeMenu  = $activeMenu ?? '';
 $initials    = $currentUser ? getUserInitials($currentUser) : '?';
 $userName    = $currentUser ? ($currentUser['prenom'] . ' ' . $currentUser['nom']) : '';
 
-// URL notifications selon rôle
 $notifUrl = match($currentUser['role'] ?? '') {
     'admin'      => APP_URL . '/admin/notifications.php',
     'professeur' => APP_URL . '/professeur/notifications.php',

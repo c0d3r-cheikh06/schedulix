@@ -1,5 +1,4 @@
 <?php
-// includes/sidebar_eleve.php — v3
 $nbMsgNonLus = countMessagesNonLus($currentUser['id']);
 $menu = [
     ['dashboard',       'Tableau de bord',    'dashboard',     '/eleve/dashboard.php'],

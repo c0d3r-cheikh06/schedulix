@@ -1,7 +1,4 @@
 <?php
-// ============================================================
-// includes/db.php — Connexion PDO singleton
-// ============================================================
 require_once __DIR__ . '/config.php';
 
 function getDB(): PDO {

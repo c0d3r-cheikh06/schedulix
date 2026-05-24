@@ -1,5 +1,4 @@
 <?php
-// admin/emplois_du_temps.php — Vue de l'EDT par classe
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
@@ -17,7 +16,6 @@ $jours      = getJoursSemaine();
 
 if (!$idClasse && !empty($allClasses)) $idClasse = $allClasses[0]['id'];
 
-// Récupère les créneaux horaires distincts
 $stmtCr = $pdo->prepare("
     SELECT DISTINCT c.heure_debut, c.heure_fin
     FROM emplois_du_temps e
@@ -28,7 +26,6 @@ $stmtCr = $pdo->prepare("
 $stmtCr->execute([$version, $idClasse]);
 $creneaux = $stmtCr->fetchAll();
 
-// Construit la grille
 $grille = [];
 foreach ($creneaux as $cr) {
     $key = $cr['heure_debut'] . '-' . $cr['heure_fin'];

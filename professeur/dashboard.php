@@ -1,5 +1,4 @@
 <?php
-// professeur/dashboard.php
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
@@ -21,7 +20,7 @@ $stmtCours = $pdo->prepare("
     JOIN salles s    ON s.id=e.id_salle
     JOIN creneaux c  ON c.id=e.id_creneau
     WHERE e.version=? AND e.id_professeur=?
-    ORDER BY FIELD(c.jour,'Lundi','Mardi','Mercredi','Jeudi','Vendredi'), c.heure_debut
+    ORDER BY FIELD(c.jour,'Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'), c.heure_debut
 ");
 $stmtCours->execute([$version, $currentUser['id']]);
 $cours = $stmtCours->fetchAll();

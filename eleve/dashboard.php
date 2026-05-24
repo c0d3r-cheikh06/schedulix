@@ -1,5 +1,4 @@
 <?php
-// eleve/dashboard.php — v3
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
@@ -24,7 +23,7 @@ if ($idClasse) {
         JOIN utilisateurs u ON u.id=e.id_professeur
         JOIN creneaux c     ON c.id=e.id_creneau
         WHERE e.version=? AND e.id_classe=? AND e.statut IN ('valide','confirme')
-        ORDER BY FIELD(c.jour,'Lundi','Mardi','Mercredi','Jeudi','Vendredi'), c.heure_debut
+        ORDER BY FIELD(c.jour,'Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'), c.heure_debut
     ");
     $stmt->execute([$version, $idClasse]);
     $cours = $stmt->fetchAll();

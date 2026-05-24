@@ -1,5 +1,4 @@
 <?php
-// admin/professeurs.php — v3 avec niveaux autorisés
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';

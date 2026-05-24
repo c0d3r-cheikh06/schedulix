@@ -1,5 +1,4 @@
 <?php
-// eleve/emploi_du_temps.php — v3 impression portrait améliorée
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
@@ -26,7 +25,7 @@ if ($idClasse && $version > 0) {
         SELECT e.*, m.nom AS mat_nom, m.couleur_hex,
                s.nom AS salle_nom,
                u.nom AS prof_nom, u.prenom AS prof_prenom,
-               c.jour, c.heure_debut, c.heure_fin, e.statut
+               c.jour, c.heure_debut, c.heure_fin
         FROM emplois_du_temps e
         JOIN matieres m     ON m.id=e.id_matiere
         JOIN salles s       ON s.id=e.id_salle
@@ -39,7 +38,6 @@ if ($idClasse && $version > 0) {
     $rows = $stmt->fetchAll();
 }
 
-// Grille horaire
 $creneaux = [];
 foreach ($rows as $r) {
     $key = $r['heure_debut'].'-'.$r['heure_fin'];
@@ -51,132 +49,155 @@ foreach ($rows as $r) {
 }
 ksort($creneaux);
 
-$parJour = array_fill_keys($jours,[]);
-foreach ($rows as $r) $parJour[$r['jour']][] = $r;
-
 $matieresSeen = []; $legendeItems = [];
 foreach ($rows as $r) {
-    if (!in_array($r['id_matiere'],$matieresSeen)) {
+    if (!in_array($r['id_matiere'], $matieresSeen)) {
         $matieresSeen[] = $r['id_matiere'];
         $legendeItems[] = $r;
     }
 }
-
 $nbCours    = count($rows);
 $nbMatieres = count($legendeItems);
-$nbProfs    = count(array_unique(array_column($rows,'id_professeur')));
+$nbProfs    = count(array_unique(array_column($rows, 'id_professeur')));
 
 $pageTitle = 'Mon emploi du temps'; $activeMenu = 'emploi_du_temps';
 include __DIR__ . '/../includes/header.php';
 include __DIR__ . '/../includes/sidebar_eleve.php';
 ?>
+
 <style>
-/* ══ IMPRESSION PORTRAIT — A4 ══════════════════════════════ */
+
 @media print {
-  #pageLoader,.topbar,.sidebar,.sidebar-overlay,
-  #toast-container,.spinner-overlay,.no-print { display:none!important; }
 
-  * { -webkit-print-color-adjust:exact!important; print-color-adjust:exact!important; }
-  body { background:#fff!important; font-family:Arial,Helvetica,sans-serif!important; font-size:9pt; }
-  .main-content { margin:0!important; padding:0!important; }
+  body > * { display: none !important; }
 
-  #print-zone { display:block!important; width:100%; }
+  #print-zone {
+    display: block !important;
+    position: static !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    overflow: visible !important;
+  }
 
-  /* En-tête établissement */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    box-sizing: border-box;
+  }
+  body {
+    background: #fff !important;
+    font-family: Arial, Helvetica, sans-serif !important;
+    font-size: 9pt;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
   .ph-wrap {
-    display:flex!important; align-items:center;
-    justify-content:space-between;
-    padding-bottom:10pt; margin-bottom:14pt;
-    border-bottom:2.5pt solid #1A56DB;
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 9pt;
+    margin-bottom: 12pt;
+    border-bottom: 2.5pt solid #1A56DB;
   }
   .ph-logo {
-    width:44pt; height:44pt;
-    background:#1A56DB!important;
-    border-radius:10pt;
-    display:flex!important; align-items:center; justify-content:center;
-    flex-shrink:0;
+    width: 42pt; height: 42pt;
+    background: #1A56DB !important;
+    border-radius: 9pt;
+    display: flex !important;
+    align-items: center; justify-content: center;
+    flex-shrink: 0;
+    color: #fff;
+    font-size: 22pt;
+    text-align: center;
+    line-height: 42pt;
   }
-  .ph-logo span { font-size:24pt; color:#fff; }
-  .ph-info { flex:1; padding-left:10pt; }
-  .ph-info h1 { font-size:14pt; font-weight:700; color:#111827; margin:0 0 2pt; }
-  .ph-info p  { font-size:8.5pt; color:#6B7280; margin:0; }
-  .ph-meta    { text-align:right; }
-  .ph-meta .app-name { font-size:12pt; font-weight:700; color:#1A56DB; }
-  .ph-meta p  { font-size:7.5pt; color:#9CA3AF; margin:2pt 0 0; }
+  .ph-info { flex: 1; padding-left: 10pt; }
+  .ph-info h1 { font-size: 13.5pt; font-weight: 700; color: #111827; margin: 0 0 2pt; }
+  .ph-info p  { font-size: 8pt; color: #6B7280; margin: 0; }
+  .ph-meta    { text-align: right; }
+  .ph-meta .app-name { font-size: 12pt; font-weight: 700; color: #1A56DB; }
+  .ph-meta p  { font-size: 7.5pt; color: #9CA3AF; margin: 2pt 0 0; }
 
-  /* Tableau principal */
-  .pt-table { width:100%; border-collapse:collapse; margin-bottom:10pt; }
-  .pt-table th {
-    background:#1A56DB!important;
-    color:#fff!important; font-weight:700;
-    font-size:8pt; padding:5.5pt 4pt;
-    text-align:center; border:1pt solid #1346C0;
-    text-transform:uppercase; letter-spacing:.3pt;
-  }
-  .pt-table th.th-time { text-align:left; width:52pt; background:#0F1C3F!important; }
-  .pt-table td {
-    border:1pt solid #E5E9F2;
-    padding:0; vertical-align:top;
-    height:36pt; min-height:36pt;
-  }
-  .pt-table td.td-time {
-    font-size:7.5pt; font-weight:700; color:#374151;
-    background:#F8F9FC!important;
-    text-align:center; padding:4pt 3pt;
-    border-right:2pt solid #C8D0E0;
-    white-space:nowrap;
-  }
-  .pt-table tr:nth-child(even) td.td-time { background:#F0F4FB!important; }
-
-  /* Cellule cours */
-  .pc {
-    height:100%; padding:3pt 4pt;
-    border-left:3pt solid transparent;
-  }
-  .pc-mat  { font-weight:700; font-size:7.5pt; color:#111827; margin-bottom:1.5pt; }
-  .pc-prof { font-size:6.5pt; color:#374151; margin-bottom:1pt; }
-  .pc-room { font-size:6.5pt; color:#6B7280; }
-
-  /* Libre */
-  .td-free { background:#FAFAFA!important; }
-
-  /* Légende */
-  .pl-wrap {
-    display:flex!important; flex-wrap:wrap;
-    gap:5pt 10pt; margin-top:8pt;
-    padding-top:6pt; border-top:1pt solid #E5E9F2;
-  }
-  .pl-item { display:flex!important; align-items:center; gap:3.5pt; font-size:7pt; color:#374151; }
-  .pl-dot  { width:7pt; height:7pt; border-radius:50%; flex-shrink:0; }
-
-  /* Résumé stats */
   .pstat-row {
-    display:flex!important; gap:8pt; margin-bottom:10pt;
+    display: flex !important;
+    gap: 7pt; margin-bottom: 10pt;
   }
   .pstat {
-    flex:1; border:1pt solid #E5E9F2; border-radius:5pt;
-    padding:6pt 8pt; text-align:center;
+    flex: 1; border: 1pt solid #E5E9F2; border-radius: 5pt;
+    padding: 6pt 8pt; text-align: center;
   }
-  .pstat-val { font-size:14pt; font-weight:700; color:#1A56DB; }
-  .pstat-lbl { font-size:6.5pt; color:#6B7280; }
+  .pstat-val { font-size: 13pt; font-weight: 700; color: #1A56DB; line-height: 1.2; }
+  .pstat-lbl { font-size: 6.5pt; color: #6B7280; }
 
-  /* Footer */
+  .pt-table { width: 100%; border-collapse: collapse; margin-bottom: 9pt; }
+  .pt-table th {
+    background: #1A56DB !important;
+    color: #fff !important;
+    font-weight: 700; font-size: 7.5pt;
+    padding: 5pt 3pt;
+    text-align: center;
+    border: 1pt solid #1346C0;
+    text-transform: uppercase; letter-spacing: .25pt;
+  }
+  .pt-table th.th-time {
+    text-align: left; width: 50pt;
+    background: #0F1C3F !important;
+    padding-left: 5pt;
+  }
+  .pt-table td {
+    border: 1pt solid #E5E9F2;
+    padding: 0; vertical-align: top;
+    height: 34pt;
+  }
+  .pt-table td.td-time {
+    font-size: 7pt; font-weight: 700; color: #374151;
+    background: #F8F9FC !important;
+    text-align: center; padding: 4pt 3pt;
+    border-right: 2pt solid #C8D0E0;
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+  .pt-table tr:nth-child(even) td.td-time { background: #EFF3FA !important; }
+  .td-free { background: #FAFAFA !important; }
+
+  .pc {
+    height: 100%; padding: 2.5pt 4pt;
+    border-left: 3pt solid transparent;
+  }
+  .pc-mat  { font-weight: 700; font-size: 7pt; color: #111827; margin-bottom: 1.5pt; }
+  .pc-prof { font-size: 6.5pt; color: #374151; margin-bottom: 1pt; }
+  .pc-room { font-size: 6pt; color: #6B7280; }
+  .pl-wrap {
+    display: flex !important;
+    flex-wrap: wrap; gap: 5pt 10pt;
+    margin-top: 7pt; padding-top: 6pt;
+    border-top: 1pt solid #E5E9F2;
+  }
+  .pl-item { display: flex !important; align-items: center; gap: 3pt; font-size: 7pt; color: #374151; }
+  .pl-dot  { width: 7pt; height: 7pt; border-radius: 50%; flex-shrink: 0; }
+
   .pf-wrap {
-    display:flex!important; justify-content:space-between;
-    margin-top:8pt; padding-top:6pt;
-    border-top:1pt solid #E5E9F2;
-    font-size:7pt; color:#9CA3AF;
+    display: flex !important; justify-content: space-between;
+    margin-top: 7pt; padding-top: 5pt;
+    border-top: 1pt solid #E5E9F2;
+    font-size: 7pt; color: #9CA3AF;
   }
 
   @page {
     size: A4 portrait;
-    margin: 13mm 11mm 13mm 11mm;
+    margin: 12mm 10mm 12mm 10mm;
   }
 }
-@media screen { #print-zone { display:none; } }
+
+@media screen {
+  #print-zone { display: none; }
+}
 </style>
 
 <div class="main-content">
+
   <div class="page-header no-print">
     <div class="page-header-left">
       <h1 class="page-title"><span class="material-icons-round">calendar_month</span> Mon emploi du temps</h1>
@@ -188,8 +209,10 @@ include __DIR__ . '/../includes/sidebar_eleve.php';
       </p>
     </div>
     <div style="display:flex;gap:.6rem;align-items:center">
-      <?php if ($version > 0 && !empty($rows)): ?>
-      <span class="badge badge-success"><span class="material-icons-round" style="font-size:14px">verified</span> Validé</span>
+      <?php if (!empty($rows)): ?>
+      <span class="badge badge-success">
+        <span class="material-icons-round" style="font-size:13px">verified</span> Validé
+      </span>
       <button class="btn btn-outline" onclick="window.print()">
         <span class="material-icons-round">print</span> Imprimer
       </button>
@@ -202,16 +225,17 @@ include __DIR__ . '/../includes/sidebar_eleve.php';
     <span class="material-icons-round">warning</span>
     <div class="alert-content"><strong>Classe non assignée.</strong> Contactez votre administrateur.</div>
   </div>
+
   <?php elseif (empty($rows)): ?>
   <div class="card no-print"><div class="card-body">
     <div class="empty-state">
       <div class="empty-state-icon"><span class="material-icons-round">calendar_today</span></div>
       <h3>Emploi du temps non disponible</h3>
-      <p>Votre emploi du temps n'a pas encore été publié. Revenez ultérieurement.</p>
+      <p>Votre emploi du temps n'est pas encore publié. Revenez ultérieurement.</p>
     </div>
   </div></div>
-  <?php else: ?>
 
+  <?php else: ?>
   <!-- Stats écran -->
   <div class="stat-grid no-print" style="margin-bottom:1.5rem">
     <div class="stat-card">
@@ -248,7 +272,7 @@ include __DIR__ . '/../includes/sidebar_eleve.php';
               <?= formatHeure($data['heure_debut']) ?><br>
               <span style="color:var(--text-light);font-size:.75rem"><?= formatHeure($data['heure_fin']) ?></span>
             </td>
-            <?php foreach ($jours as $j): $cell=$data[$j]??null; ?>
+            <?php foreach ($jours as $j): $cell = $data[$j] ?? null; ?>
             <td>
               <?php if ($cell): ?>
               <div class="edt-cell" style="background:<?= h($cell['couleur_hex']) ?>1A;border-left:3px solid <?= h($cell['couleur_hex']) ?>">
@@ -256,7 +280,7 @@ include __DIR__ . '/../includes/sidebar_eleve.php';
                 <div class="edt-cell-info"><span class="material-icons-round">person</span><?= h($cell['prof_prenom'].' '.$cell['prof_nom']) ?></div>
                 <div class="edt-cell-info"><span class="material-icons-round">meeting_room</span><?= h($cell['salle_nom']) ?></div>
               </div>
-              <?php else: ?><div style="min-height:58px"></div><?php endif; ?>
+              <?php else: ?><div style="min-height:56px"></div><?php endif; ?>
             </td>
             <?php endforeach; ?>
           </tr>
@@ -281,19 +305,17 @@ include __DIR__ . '/../includes/sidebar_eleve.php';
   <?php endif; ?>
 </div>
 
-<!-- ══ ZONE D'IMPRESSION PORTRAIT ══════════════════════════ -->
 <?php if (!empty($rows)): ?>
+
 <div id="print-zone">
 
-  <!-- En-tête -->
   <div class="ph-wrap">
-    <div class="ph-logo"><span>🎓</span></div>
+    <div class="ph-logo">🎓</div>
     <div class="ph-info">
       <h1>Emploi du temps — <?= $classe ? h($classe['nom']) : 'Ma classe' ?></h1>
       <p>
         <?php if (!empty($classe['niveau_nom'])): ?><?= h($classe['niveau_nom']) ?> · <?php endif; ?>
-        Version <?= $version ?>
-        <?php if ($classe): ?> · Capacité : <?= $classe['capacite'] ?> élèves<?php endif; ?>
+        Version <?= $version ?><?php if ($classe): ?> · <?= $classe['capacite'] ?> élèves<?php endif; ?>
         · Année scolaire <?= date('Y').'/'.((int)date('Y')+1) ?>
       </p>
     </div>
@@ -308,7 +330,7 @@ include __DIR__ . '/../includes/sidebar_eleve.php';
     <div class="pstat"><div class="pstat-val"><?= $nbCours ?></div><div class="pstat-lbl">Cours / semaine</div></div>
     <div class="pstat"><div class="pstat-val"><?= $nbMatieres ?></div><div class="pstat-lbl">Matières</div></div>
     <div class="pstat"><div class="pstat-val"><?= $nbProfs ?></div><div class="pstat-lbl">Professeurs</div></div>
-    <div class="pstat"><div class="pstat-val"><?= count($jours) ?></div><div class="pstat-lbl">Jours / semaine</div></div>
+    <div class="pstat"><div class="pstat-val"><?= count($jours) ?></div><div class="pstat-lbl">Jours</div></div>
   </div>
 
   <!-- Tableau -->
@@ -326,8 +348,8 @@ include __DIR__ . '/../includes/sidebar_eleve.php';
           <?= formatHeure($data['heure_debut']) ?><br>
           <span style="font-weight:400;color:#9CA3AF"><?= formatHeure($data['heure_fin']) ?></span>
         </td>
-        <?php foreach ($jours as $j): $cell=$data[$j]??null; ?>
-        <td class="<?= $cell?'':'td-free' ?>">
+        <?php foreach ($jours as $j): $cell = $data[$j] ?? null; ?>
+        <td class="<?= $cell ? '' : 'td-free' ?>">
           <?php if ($cell): ?>
           <div class="pc" style="background:<?= h($cell['couleur_hex']) ?>15;border-left-color:<?= h($cell['couleur_hex']) ?>">
             <div class="pc-mat"><?= h($cell['mat_nom']) ?></div>
@@ -363,4 +385,5 @@ include __DIR__ . '/../includes/sidebar_eleve.php';
 <?php endif; ?>
 
 <script src="<?= APP_URL ?>/assets/js/main.js"></script>
-</body></html>
+</body>
+</html>

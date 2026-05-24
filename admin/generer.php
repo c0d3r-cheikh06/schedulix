@@ -1,5 +1,4 @@
 <?php
-// admin/generer.php — Génération EDT v3 (disponibilités + niveaux)
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
@@ -31,7 +30,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $nouvelleVersion = $versionActuelle + 1;
         $jours = getJoursSemaine();
 
-        // ── Construire les créneaux horaires ──────────────────
         $creneaux = [];
         foreach ($jours as $jour) {
             $cur = strtotime($heureDebut);
@@ -56,7 +54,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $inserted = 0; $skipped = 0; $skipDispo = 0; $skipNiveau = 0;
         $salleOccupee = []; $profOccupe = []; $classeOccupee = [];
 
-        // Cache des niveaux de classe
         $classeNiveaux = [];
         foreach ($classes as $idC) {
             $row = $pdo->prepare('SELECT id_niveau FROM classes WHERE id=?');
@@ -81,7 +78,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             foreach ($matsProfs as $mp) {
                 $idProf = $mp['id_professeur'];
 
-                // ── Filtre niveau ──────────────────────────────
                 if ($respectNiveau && $idNiveauClasse > 0) {
                     if (!profAutoriseNiveau($idProf, $idNiveauClasse)) {
                         $skipNiveau++;

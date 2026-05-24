@@ -1,7 +1,4 @@
 <?php
-// ============================================================
-// includes/auth.php — Gestion de l'authentification
-// ============================================================
 if (session_status() === PHP_SESSION_NONE) session_start();
 
 function isLoggedIn(): bool {

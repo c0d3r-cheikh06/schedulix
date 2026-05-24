@@ -1,21 +1,16 @@
-# Variables d'environnement — NE JAMAIS COMMITTER
+
 .env
 
-# Dépendances
 vendor/
 node_modules/
 
-# Caches et logs
 *.log
 *.cache
 .DS_Store
 Thumbs.db
 
-# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# PHPMailer (si installé manuellement)
-# phpmailer/

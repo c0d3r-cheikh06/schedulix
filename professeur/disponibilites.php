@@ -1,5 +1,4 @@
 <?php
-// professeur/disponibilites.php — Gestion des disponibilités
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
@@ -65,7 +64,7 @@ $jours = getJoursSemaine();
 $stmt = $pdo->prepare("
     SELECT * FROM disponibilites
     WHERE id_professeur=?
-    ORDER BY FIELD(jour,'Lundi','Mardi','Mercredi','Jeudi','Vendredi'), heure_debut
+    ORDER BY FIELD(jour,'Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'), heure_debut
 ");
 $stmt->execute([$currentUser['id']]);
 $dispos = $stmt->fetchAll();

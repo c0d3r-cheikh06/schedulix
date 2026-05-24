@@ -1,5 +1,4 @@
 <?php
-// admin/horaires.php — Gestion des créneaux horaires
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
@@ -34,7 +33,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif ($action === 'delete') {
         $id = (int)$_POST['id'];
-        // Vérifier s'il est utilisé
         $chk = $pdo->prepare('SELECT COUNT(*) FROM emplois_du_temps WHERE id_creneau=?');
         $chk->execute([$id]);
         if ((int)$chk->fetchColumn() > 0) {
