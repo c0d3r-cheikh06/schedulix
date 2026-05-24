@@ -39,7 +39,7 @@ $notifUrl = match($currentUser['role'] ?? '') {
 <div id="pageLoader">
   <div class="loader-logo">
     <div class="loader-logo-icon"><span class="material-icons-round">school</span></div>
-    <span class="loader-logo-text"><?= APP_NAME ?></span>
+    <span class="loader-logo-text">Schedulix</span>
   </div>
   <div class="loader-bar-track"><div class="loader-bar-fill"></div></div>
   <p class="loader-tagline">Plateforme académique professionnelle</p>
@@ -62,7 +62,7 @@ $notifUrl = match($currentUser['role'] ?? '') {
 
   <div class="topbar-brand">
     <div class="topbar-brand-icon"><span class="material-icons-round">school</span></div>
-    <?= APP_NAME ?>
+  Schedulix
   </div>
 
   <div class="topbar-divider"></div>

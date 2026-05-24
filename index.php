@@ -76,7 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           <div style="width:36px;height:36px;background:linear-gradient(135deg,var(--primary) 0%,var(--accent) 100%);border-radius:9px;display:flex;align-items:center;justify-content:center">
             <span class="material-icons-round" style="font-size:18px;color:#fff">school</span>
           </div>
-          <span style="font-family:'DM Serif Display',serif;font-size:1.15rem;color:var(--primary)"><?= APP_NAME ?></span>
+          <span style="font-family:'DM Serif Display',serif;font-size:1.15rem;color:var(--primary)">Schedulix</span>
         </div>
         <h2>Bienvenue</h2>
         <p>Connectez-vous à votre espace académique</p>
