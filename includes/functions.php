@@ -1,6 +1,10 @@
 <?php
+// ============================================================
+// includes/functions.php — Fonctions utilitaires globales
+// ============================================================
 require_once __DIR__ . '/db.php';
 
+// ── Sécurité / sanitisation ───────────────────────────────
 function h(string $str): string {
     return htmlspecialchars($str, ENT_QUOTES, 'UTF-8');
 }
@@ -12,6 +16,7 @@ function redirect(string $url): void {
     exit;
 }
 
+// ── CSRF ──────────────────────────────────────────────────
 function getCsrfToken(): string {
     if (session_status() === PHP_SESSION_NONE) session_start();
     if (empty($_SESSION['csrf_token'])) {
@@ -28,6 +33,7 @@ function verifyCsrf(): void {
     }
 }
 
+// ── Notifications internes ────────────────────────────────
 function countNotificationsNonLues(int $userId): int {
     $stmt = getDB()->prepare('SELECT COUNT(*) FROM notifications WHERE id_utilisateur=? AND est_lu=0');
     $stmt->execute([$userId]);
@@ -38,6 +44,7 @@ function sendNotification(int $userId, string $titre, string $message, string $t
     $stmt->execute([$userId, $titre, $message, $type]);
 }
 
+// ── Données ───────────────────────────────────────────────
 function getClasses(): array {
     return getDB()->query('SELECT * FROM classes ORDER BY niveau, nom')->fetchAll();
 }
@@ -89,6 +96,7 @@ function generateTempPassword(int $length = 10): string {
     return $pass;
 }
 
+// ── Messages d'erreur professionnels ─────────────────────
 function getBusinessError(string $code): string {
     $errors = [
         'salle_exists'      => 'Cette salle existe déjà dans le système. Veuillez choisir un nom différent ou modifier la salle existante.',
@@ -112,12 +120,15 @@ function getBusinessError(string $code): string {
     return $errors[$code] ?? 'Une erreur inattendue s\'est produite. Veuillez réessayer.';
 }
 
+// ── Email (PHPMailer-compatible, ou fallback mail()) ──────
 function sendEmailNotification(string $to, string $toName, string $subject, string $htmlBody): bool {
+    // Si SMTP non configuré, on log et on renvoie true silencieusement
     if (!SMTP_USER || !SMTP_PASS) {
         error_log("[EduSchedule] Email non envoyé (SMTP non configuré) → {$to} : {$subject}");
         return true; // Ne pas bloquer l'UX
     }
 
+    // Utilise PHPMailer si disponible (recommandé)
     $mailerClass = __DIR__ . '/../vendor/phpmailer/phpmailer/src/PHPMailer.php';
     if (file_exists($mailerClass)) {
         require_once $mailerClass;
@@ -147,12 +158,14 @@ function sendEmailNotification(string $to, string $toName, string $subject, stri
         }
     }
 
+    // Fallback : mail() natif PHP
     $headers  = "MIME-Version: 1.0\r\n";
     $headers .= "Content-type: text/html; charset=UTF-8\r\n";
     $headers .= "From: " . EMAIL_FROM_NAME . " <" . EMAIL_FROM . ">\r\n";
     return mail($to, $subject, $htmlBody, $headers);
 }
 
+// ── Template HTML email professionnel ────────────────────
 function buildEmailTemplate(array $data): string {
     $name       = h($data['name']       ?? 'Utilisateur');
     $title      = h($data['title']      ?? 'Notification EduSchedule');
@@ -165,7 +178,7 @@ function buildEmailTemplate(array $data): string {
     $appUrl     = APP_URL;
     $year       = date('Y');
 
-    $classeRow = $classe
+     $classeRow = $classe
     ? "<tr>
         <td style='padding:4px 0;font-size:13px;color:#6B7280;'>
             Classe concernée
@@ -186,6 +199,7 @@ function buildEmailTemplate(array $data): string {
         </td>
       </tr>"
     : '';
+
     return <<<HTML
 <!DOCTYPE html>
 <html lang="fr">
@@ -219,13 +233,14 @@ function buildEmailTemplate(array $data): string {
           <table width="100%" cellpadding="0" cellspacing="0" style="background:#F3F6FB;border:1px solid #E5E9F2;border-radius:10px;margin:24px 0;">
             <tr><td style="padding:20px 24px;">
               <table width="100%" cellpadding="0" cellspacing="0">
-                {$classeRow}
-               {$versionRow}
-                <tr><td style='padding:4px 0;font-size:13px;color:#6B7280;'>Date de mise à jour</td><td style='padding:4px 0;font-size:13px;font-weight:600;color:#111827;text-align:right;'>{$date}</td></tr>
+              {$classeRow}
+               {$versionRow}  
+              <tr><td style='padding:4px 0;font-size:13px;color:#6B7280;'>Date de mise à jour</td><td style='padding:4px 0;font-size:13px;font-weight:600;color:#111827;text-align:right;'>{$date}</td></tr>
               </table>
             </td></tr>
           </table>
 
+          <!-- CTA Button -->
           <div style="text-align:center;margin:28px 0 8px;">
             <a href="{$actionUrl}" style="display:inline-block;background:#1A56DB;color:#fff;text-decoration:none;padding:13px 32px;border-radius:8px;font-size:14px;font-weight:600;letter-spacing:.2px;">
               {$actionText} →
@@ -250,6 +265,7 @@ function buildEmailTemplate(array $data): string {
 HTML;
 }
 
+// ── Envoi email EDT mis à jour (professeurs + élèves) ─────
 function notifyEdtUpdate(int $version, array $classesAffectees = []): array {
     $pdo   = getDB();
     $date  = date('d/m/Y à H:i');
@@ -311,6 +327,11 @@ function notifyEdtUpdate(int $version, array $classesAffectees = []): array {
     return ['sent' => $sent, 'errors' => $errors];
 }
 
+// ============================================================
+// FONCTIONS v3 — Niveaux, Messagerie, EDT amélioré
+// ============================================================
+
+// ── Niveaux ───────────────────────────────────────────────
 function getNiveaux(): array {
     return getDB()->query('SELECT * FROM niveaux ORDER BY ordre, nom')->fetchAll();
 }
@@ -331,11 +352,14 @@ function getClassesWithNiveau(): array {
     return getDB()->query("SELECT *, \'\' AS niveau_nom, NULL AS id_niveau_rel FROM classes ORDER BY nom")->fetchAll();
 }
 
+// ── Niveaux d'un professeur ───────────────────────────────
 function getNiveauxProfesseur(int $idProf): array {
     $stmt = getDB()->prepare('SELECT id_niveau FROM professeur_niveau WHERE id_professeur=?');
     $stmt->execute([$idProf]);
     return array_column($stmt->fetchAll(), 'id_niveau');
 }
+
+// ── Disponibilités d'un professeur (indexées par jour+heure) ─
 function getDisponibilitesProfesseur(int $idProf): array {
     $stmt = getDB()->prepare('SELECT * FROM disponibilites WHERE id_professeur=? AND disponible=1');
     $stmt->execute([$idProf]);
@@ -346,16 +370,20 @@ function getDisponibilitesProfesseur(int $idProf): array {
     return $result;
 }
 
+// Vérifie si un professeur est disponible pour un créneau donné
 function profEstDisponible(int $idProf, string $jour, string $hDeb, string $hFin): bool {
     $dispos = getDisponibilitesProfesseur($idProf);
+    // Si aucune dispo enregistrée → on considère disponible (pas de contrainte)
     if (empty($dispos)) return true;
     if (!isset($dispos[$jour])) return false;
     foreach ($dispos[$jour] as $d) {
+        // Le créneau doit être entièrement dans une plage dispo
         if ($hDeb >= $d['debut'] && $hFin <= $d['fin']) return true;
     }
     return false;
 }
 
+// Vérifie si un prof est autorisé à enseigner dans un niveau
 function profAutoriseNiveau(int $idProf, ?int $idNiveau): bool {
     if (!$idNiveau) return true; // Pas de niveau défini → pas de contrainte
     $niveaux = getNiveauxProfesseur($idProf);
@@ -363,6 +391,7 @@ function profAutoriseNiveau(int $idProf, ?int $idNiveau): bool {
     return in_array($idNiveau, $niveaux);
 }
 
+// ── Messagerie ────────────────────────────────────────────
 function countMessagesNonLus(int $idEleve): int {
     $stmt = getDB()->prepare("
         SELECT COUNT(*) FROM messages m
@@ -424,4 +453,116 @@ function notifyMessageEleves(array $message, string $classeNom): array {
         $ok ? $sent++ : $errors++;
     }
     return ['sent' => $sent, 'errors' => $errors];
+}
+
+// ============================================================
+// FONCTIONS v4 — Volume horaire par classe
+// ============================================================
+
+/**
+ * Retourne le volume horaire d'une matière pour une classe donnée.
+ * Priorité : volume_horaire (spécifique) > matieres.nb_heures_semaine (global)
+ */
+function getVolumeHoraire(int $idClasse, int $idMatiere): int {
+    static $cache = [];
+    $cacheKey = "{$idClasse}_{$idMatiere}";
+    if (isset($cache[$cacheKey])) return $cache[$cacheKey];
+
+    $pdo = getDB();
+
+    // 1. Chercher dans volume_horaire (entrée spécifique classe×matière)
+    static $vhExists = null;
+    if ($vhExists === null) {
+        try { $pdo->query('SELECT 1 FROM volume_horaire LIMIT 1'); $vhExists = true; }
+        catch (PDOException $e) { $vhExists = false; }
+    }
+    if ($vhExists) {
+        $stmt = $pdo->prepare('SELECT nb_heures_semaine FROM volume_horaire WHERE id_classe=? AND id_matiere=? LIMIT 1');
+        $stmt->execute([$idClasse, $idMatiere]);
+        $row = $stmt->fetch();
+        if ($row) return $cache[$cacheKey] = (int)$row['nb_heures_semaine'];
+    }
+
+    // 2. Fallback : valeur globale de la matière
+    $stmt = $pdo->prepare('SELECT nb_heures_semaine FROM matieres WHERE id=? LIMIT 1');
+    $stmt->execute([$idMatiere]);
+    $row = $stmt->fetch();
+    return $cache[$cacheKey] = (int)($row['nb_heures_semaine'] ?? 2);
+}
+
+/**
+ * Vérifie si une matière est configurée pour une classe (dans affectations ou volume_horaire)
+ */
+function classeHasMatiere(int $idClasse, int $idMatiere): bool {
+    static $affExists = null;
+    if ($affExists === null) {
+        try { getDB()->query('SELECT 1 FROM affectations LIMIT 1'); $affExists = true; }
+        catch (PDOException $e) { $affExists = false; }
+    }
+    if ($affExists) {
+        $stmt = getDB()->prepare('SELECT 1 FROM affectations WHERE id_classe=? AND id_matiere=? LIMIT 1');
+        $stmt->execute([$idClasse, $idMatiere]);
+        return (bool)$stmt->fetch();
+    }
+    // Sans table affectations : toutes les matières sont disponibles
+    return true;
+}
+
+/**
+ * Retourne les matières configurées pour une classe avec leur professeur et volume horaire
+ */
+function getMatieresByClasse(int $idClasse): array {
+    $pdo = getDB();
+    static $affExists = null;
+    if ($affExists === null) {
+        try { $pdo->query('SELECT 1 FROM affectations LIMIT 1'); $affExists = true; }
+        catch (PDOException $e) { $affExists = false; }
+    }
+    if ($affExists) {
+        $stmt = $pdo->prepare("
+            SELECT a.id_matiere, a.id_professeur, m.nom AS mat_nom, m.couleur_hex,
+                   COALESCE(vh.nb_heures_semaine, m.nb_heures_semaine) AS nb_heures_semaine,
+                   u.nom AS prof_nom, u.prenom AS prof_prenom
+            FROM affectations a
+            JOIN matieres m      ON m.id=a.id_matiere
+            JOIN utilisateurs u  ON u.id=a.id_professeur
+            LEFT JOIN volume_horaire vh ON vh.id_classe=a.id_classe AND vh.id_matiere=a.id_matiere
+            WHERE a.id_classe=?
+            ORDER BY m.nom
+        ");
+        $stmt->execute([$idClasse]);
+        return $stmt->fetchAll();
+    }
+    // Fallback historique
+    $stmt = $pdo->prepare("
+        SELECT pm.id_matiere, pm.id_professeur, m.nom AS mat_nom, m.couleur_hex,
+               COALESCE(vh.nb_heures_semaine, m.nb_heures_semaine) AS nb_heures_semaine,
+               u.nom AS prof_nom, u.prenom AS prof_prenom
+        FROM professeur_matiere pm
+        JOIN matieres m      ON m.id=pm.id_matiere
+        JOIN utilisateurs u  ON u.id=pm.id_professeur AND u.statut='actif'
+        LEFT JOIN volume_horaire vh ON vh.id_classe=? AND vh.id_matiere=pm.id_matiere
+        WHERE pm.id_matiere = pm.id_matiere
+        GROUP BY pm.id_matiere
+    ");
+    $stmt->execute([$idClasse]);
+    return $stmt->fetchAll();
+}
+
+/**
+ * Récupère la grille complète volume_horaire pour un affichage.
+ * Retourne un tableau indexé [id_classe][id_matiere] => nb_heures
+ */
+function getGrilleVolumeHoraire(): array {
+    static $tableExists = null;
+    if ($tableExists === null) {
+        try { getDB()->query('SELECT 1 FROM volume_horaire LIMIT 1'); $tableExists = true; }
+        catch (PDOException $e) { $tableExists = false; }
+    }
+    $grille = [];
+    if (!$tableExists) return $grille;
+    foreach (getDB()->query('SELECT * FROM volume_horaire')->fetchAll() as $r) {
+        $grille[$r['id_classe']][$r['id_matiere']] = (int)$r['nb_heures_semaine'];
+    }
+    return $grille;
 }

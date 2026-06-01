@@ -1,4 +1,5 @@
 <?php
+// admin/generer.php — Génération EDT v3 (disponibilités + niveaux)
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
@@ -30,6 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $nouvelleVersion = $versionActuelle + 1;
         $jours = getJoursSemaine();
 
+        // ── Construire les créneaux horaires ──────────────────
         $creneaux = [];
         foreach ($jours as $jour) {
             $cur = strtotime($heureDebut);
@@ -54,6 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $inserted = 0; $skipped = 0; $skipDispo = 0; $skipNiveau = 0;
         $salleOccupee = []; $profOccupe = []; $classeOccupee = [];
 
+        // Cache des niveaux de classe
         $classeNiveaux = [];
         foreach ($classes as $idC) {
             $row = $pdo->prepare('SELECT id_niveau FROM classes WHERE id=?');
@@ -64,20 +67,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         foreach ($classes as $idClasse) {
             $idNiveauClasse = $classeNiveaux[$idClasse] ?? 0;
 
-            // Récupérer les paires prof↔matière
-            $stmtMats = $pdo->prepare("
-                SELECT pm.id_matiere, pm.id_professeur, m.nb_heures_semaine
-                FROM professeur_matiere pm
-                JOIN matieres m ON m.id=pm.id_matiere
-                JOIN utilisateurs u ON u.id=pm.id_professeur
-                WHERE u.statut='actif'
-            ");
-            $stmtMats->execute();
-            $matsProfs = $stmtMats->fetchAll();
+            // ══════════════════════════════════════════════════════
+            // SOURCE DES MATIÈRES : table affectations (si configurée)
+            // Fallback : professeur_matiere (comportement historique)
+            // ══════════════════════════════════════════════════════
+            $hasAffTable = false;
+            try { $pdo->query('SELECT 1 FROM affectations LIMIT 1'); $hasAffTable = true; }
+            catch (PDOException $e) {}
+
+            if ($hasAffTable) {
+                // Mode v4 : utiliser les affectations classe×matière×prof
+                $stmtAff = $pdo->prepare("
+                    SELECT a.id_matiere, a.id_professeur,
+                           COALESCE(vh.nb_heures_semaine, m.nb_heures_semaine) AS nb_heures_cible
+                    FROM affectations a
+                    JOIN matieres m ON m.id=a.id_matiere
+                    JOIN utilisateurs u ON u.id=a.id_professeur AND u.statut='actif'
+                    LEFT JOIN volume_horaire vh ON vh.id_classe=a.id_classe AND vh.id_matiere=a.id_matiere
+                    WHERE a.id_classe=?
+                ");
+                $stmtAff->execute([$idClasse]);
+                $matsProfs = $stmtAff->fetchAll();
+            } else {
+                // Fallback : toutes les paires prof×matière (mode avant v4)
+                $stmtMats = $pdo->prepare("
+                    SELECT pm.id_matiere, pm.id_professeur,
+                           COALESCE(vh.nb_heures_semaine, m.nb_heures_semaine) AS nb_heures_cible
+                    FROM professeur_matiere pm
+                    JOIN matieres m ON m.id=pm.id_matiere
+                    JOIN utilisateurs u ON u.id=pm.id_professeur AND u.statut='actif'
+                    LEFT JOIN volume_horaire vh ON vh.id_classe=? AND vh.id_matiere=pm.id_matiere
+                ");
+                $stmtMats->execute([$idClasse]);
+                $matsProfs = $stmtMats->fetchAll();
+            }
+
+            // Clé de déduplication : une seule entrée par matière pour cette classe
+            // (évite le bug de doublement quand plusieurs profs enseignent la même matière)
+            $matieresPlanifiees = []; // [idMatiere] = nbHeuresDejaPlacees
 
             foreach ($matsProfs as $mp) {
-                $idProf = $mp['id_professeur'];
+                $idProf    = (int)$mp['id_professeur'];
+                $idMatiere = (int)$mp['id_matiere'];
 
+                // ── Filtre niveau ──────────────────────────────────
                 if ($respectNiveau && $idNiveauClasse > 0) {
                     if (!profAutoriseNiveau($idProf, $idNiveauClasse)) {
                         $skipNiveau++;
@@ -85,15 +118,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
 
-                $heuresPlacees = 0;
+                // ── Volume cible STRICT pour ce couple classe×matière ──
+                // nb_heures_cible est en HEURES. On le convertit en nombre de SÉANCES
+                // selon la durée du créneau choisi (ex : 4h ÷ 2h/créneau = 2 séances).
+                $nbHeuresMatiere  = (int)$mp['nb_heures_cible'];
+                $dureeCreneauH    = $dureeCreneau / 60.0;          // minutes → heures
+                $nbSeancesCible   = (int)ceil($nbHeuresMatiere / $dureeCreneauH);
+
+                // ── Déduplication : ne pas replanifier une matière déjà complète ──
+                $seancesDejaPlacees = $matieresPlanifiees[$idMatiere] ?? 0;
+                if ($seancesDejaPlacees >= $nbSeancesCible) continue;
+
                 foreach ($creneaux as $cr) {
-                    if ($heuresPlacees >= $mp['nb_heures_semaine']) break;
+                    // Vérifier combien de séances on a déjà placé pour cette matière dans cette classe
+                    $seancesDejaPlacees = $matieresPlanifiees[$idMatiere] ?? 0;
+                    if ($seancesDejaPlacees >= $nbSeancesCible) break;
 
                     $key = $cr['id'];
                     if (!empty($classeOccupee[$idClasse][$key])) continue;
                     if (!empty($profOccupe[$idProf][$key]))       continue;
 
-                    // ── Filtre disponibilité ────────────────────
+                    // ── Filtre disponibilité ──────────────────────
                     if ($respectDispo) {
                         if (!profEstDisponible($idProf, $cr['jour'], $cr['heure_debut'].':00', $cr['heure_fin'].':00')) {
                             $skipDispo++;
@@ -108,18 +153,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                     if (!$idSalle) { $skipped++; continue; }
 
-                    // Doublon en BDD
-                    $chkDbl = $pdo->prepare("SELECT id FROM emplois_du_temps WHERE version=? AND id_creneau=? AND (id_salle=? OR id_professeur=? OR id_classe=?) LIMIT 1");
+                    // Vérification doublon strict BDD
+                    $chkDbl = $pdo->prepare("
+                        SELECT id FROM emplois_du_temps
+                        WHERE version=? AND id_creneau=?
+                          AND (id_salle=? OR id_professeur=? OR id_classe=?)
+                        LIMIT 1
+                    ");
                     $chkDbl->execute([$nouvelleVersion,$cr['id'],$idSalle,$idProf,$idClasse]);
                     if ($chkDbl->fetch()) { $skipped++; continue; }
 
-                    $pdo->prepare("INSERT INTO emplois_du_temps (version,id_classe,id_matiere,id_professeur,id_salle,id_creneau,statut) VALUES (?,?,?,?,?,?,'provisoire')")
-                        ->execute([$nouvelleVersion,$idClasse,$mp['id_matiere'],$idProf,$idSalle,$cr['id']]);
+                    $pdo->prepare("INSERT INTO emplois_du_temps
+                        (version,id_classe,id_matiere,id_professeur,id_salle,id_creneau,statut)
+                        VALUES (?,?,?,?,?,?,'provisoire')")
+                        ->execute([$nouvelleVersion,$idClasse,$idMatiere,$idProf,$idSalle,$cr['id']]);
 
-                    $salleOccupee[$idSalle][$key]   = true;
-                    $profOccupe[$idProf][$key]       = true;
-                    $classeOccupee[$idClasse][$key]  = true;
-                    $inserted++; $heuresPlacees++;
+                    $salleOccupee[$idSalle][$key]         = true;
+                    $profOccupe[$idProf][$key]             = true;
+                    $classeOccupee[$idClasse][$key]        = true;
+                    $matieresPlanifiees[$idMatiere]        = ($matieresPlanifiees[$idMatiere] ?? 0) + 1; // +1 séance placée
+                    $inserted++;
                 }
             }
         }
@@ -142,14 +195,72 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $emailResult = notifyEdtUpdate($nouvelleVersion, $classesAff);
 
+        // ── Rapport de couverture strict ─────────────────────────────
+        $rapportManquants = [];
+        $hasAffTableRapport = false;
+        try { $pdo->query('SELECT 1 FROM affectations LIMIT 1'); $hasAffTableRapport = true; }
+        catch (PDOException $e) {}
+
+        foreach ($classes as $idClasse) {
+            $clRow = $pdo->prepare('SELECT nom FROM classes WHERE id=? LIMIT 1');
+            $clRow->execute([$idClasse]);
+            $clNom = $clRow->fetchColumn();
+
+            if ($hasAffTableRapport) {
+                // Mode v4 : seules les matières configurées dans affectations
+                $stmtR = $pdo->prepare("
+                    SELECT a.id_matiere, m.nom AS mat_nom,
+                           COALESCE(vh.nb_heures_semaine, m.nb_heures_semaine) AS cible
+                    FROM affectations a
+                    JOIN matieres m ON m.id=a.id_matiere
+                    LEFT JOIN volume_horaire vh ON vh.id_classe=a.id_classe AND vh.id_matiere=a.id_matiere
+                    WHERE a.id_classe=?
+                    GROUP BY a.id_matiere
+                ");
+                $stmtR->execute([$idClasse]);
+            } else {
+                $stmtR = $pdo->prepare("
+                    SELECT pm.id_matiere, m.nom AS mat_nom,
+                           COALESCE(vh.nb_heures_semaine, m.nb_heures_semaine) AS cible
+                    FROM professeur_matiere pm
+                    JOIN matieres m ON m.id=pm.id_matiere
+                    LEFT JOIN volume_horaire vh ON vh.id_classe=? AND vh.id_matiere=pm.id_matiere
+                    GROUP BY pm.id_matiere
+                ");
+                $stmtR->execute([$idClasse]);
+            }
+
+            foreach ($stmtR->fetchAll() as $row) {
+                // Convertir les heures en séances selon la durée du créneau
+                $cibleH       = (int)$row['cible'];
+                $dureeH       = $dureeCreneau / 60.0;
+                $cibleSeances = (int)ceil($cibleH / $dureeH);
+                $stmtCnt = $pdo->prepare("SELECT COUNT(*) FROM emplois_du_temps WHERE version=? AND id_classe=? AND id_matiere=?");
+                $stmtCnt->execute([$nouvelleVersion, $idClasse, $row['id_matiere']]);
+                $place = (int)$stmtCnt->fetchColumn();
+                if ($place !== $cibleSeances) {
+                    $rapportManquants[] = [
+                        'classe'  => $clNom,
+                        'matiere' => $row['mat_nom'],
+                        'cible'   => $cibleH,          // afficher en heures
+                        'seances' => $cibleSeances,    // en séances
+                        'place'   => $place,
+                        'manque'  => $place < $cibleSeances ? $cibleSeances - $place : 0,
+                        'surplus' => $place > $cibleSeances ? $place - $cibleSeances : 0,
+                    ];
+                }
+            }
+        }
+
         $stats = [
-            'version'      => $nouvelleVersion,
-            'inserted'     => $inserted,
-            'skipped'      => $skipped,
-            'skip_dispo'   => $skipDispo,
-            'skip_niveau'  => $skipNiveau,
-            'email_sent'   => $emailResult['sent'],
-            'email_errors' => $emailResult['errors'],
+            'version'           => $nouvelleVersion,
+            'inserted'          => $inserted,
+            'skipped'           => $skipped,
+            'skip_dispo'        => $skipDispo,
+            'skip_niveau'       => $skipNiveau,
+            'email_sent'        => $emailResult['sent'],
+            'email_errors'      => $emailResult['errors'],
+            'rapport_manquants' => $rapportManquants,
         ];
     }
 }
@@ -212,16 +323,71 @@ include __DIR__ . '/../includes/sidebar_admin.php';
         <?php endforeach; ?>
       </div>
       <?php if ($stats['email_sent'] > 0): ?>
-      <div class="alert alert-success" style="margin-bottom:0">
+      <div class="alert alert-success" style="margin-bottom:.75rem">
         <span class="material-icons-round">email</span>
         <div class="alert-content">Professeurs et élèves notifiés par email avec succès.</div>
       </div>
       <?php elseif ($stats['email_errors'] > 0): ?>
-      <div class="alert alert-warning" style="margin-bottom:0">
+      <div class="alert alert-warning" style="margin-bottom:.75rem">
         <span class="material-icons-round">warning</span>
         <div class="alert-content">Certaines notifications n'ont pas pu être envoyées. Vérifiez la configuration SMTP.</div>
       </div>
       <?php endif; ?>
+
+      <?php if (!empty($stats['rapport_manquants'])): ?>
+      <div class="alert alert-warning" style="margin-bottom:.75rem;flex-direction:column;align-items:flex-start">
+        <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.6rem">
+          <span class="material-icons-round" style="color:var(--warning)">warning</span>
+          <strong>Heures non planifiées — <?= count($stats['rapport_manquants']) ?> couple(s) classe×matière non conformes</strong>
+        </div>
+        <div style="width:100%;overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:.8rem">
+            <thead>
+              <tr style="background:rgba(0,0,0,.05)">
+                <th style="padding:.4rem .75rem;text-align:left;font-weight:600">Classe</th>
+                <th style="padding:.4rem .75rem;text-align:left;font-weight:600">Matière</th>
+                <th style="padding:.4rem .75rem;text-align:center;font-weight:600">Cible (h)</th>
+                <th style="padding:.4rem .75rem;text-align:center;font-weight:600">Cible (séances)</th>
+                <th style="padding:.4rem .75rem;text-align:center;font-weight:600">Placées</th>
+                <th style="padding:.4rem .75rem;text-align:center;font-weight:600">Écart</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php foreach ($stats['rapport_manquants'] as $r): ?>
+              <tr style="border-top:1px solid rgba(0,0,0,.07)">
+                <td style="padding:.35rem .75rem;font-weight:600"><?= h($r['classe']) ?></td>
+                <td style="padding:.35rem .75rem"><?= h($r['matiere']) ?></td>
+                <td style="padding:.35rem .75rem;text-align:center;font-weight:700;color:var(--primary)"><?= $r['cible'] ?>h</td>
+                <td style="padding:.35rem .75rem;text-align:center;color:var(--text-muted)"><?= $r['seances'] ?? '—' ?> séances</td>
+                <td style="padding:.35rem .75rem;text-align:center"><?= $r['place'] ?> séances</td>
+                <td style="padding:.35rem .75rem;text-align:center">
+                  <?php if ($r['surplus'] > 0): ?>
+                  <span style="background:var(--warning-lt);color:var(--warning);font-weight:700;padding:.1rem .4rem;border-radius:99px">
+                    +<?= $r['surplus'] ?>h en trop
+                  </span>
+                  <?php else: ?>
+                  <span style="background:var(--danger-lt);color:var(--danger);font-weight:700;padding:.1rem .4rem;border-radius:99px">
+                    -<?= $r['manque'] ?>h manquantes
+                  </span>
+                  <?php endif; ?>
+                </td>
+              </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+        <p style="font-size:.78rem;margin-top:.6rem;color:#92400E">
+          Causes possibles : créneaux insuffisants, conflits, disponibilités restrictives ou volume horaire mal configuré. Vérifiez la page <strong>Matières &amp; Volume horaire</strong>.
+          Ajoutez des créneaux ou assouplissez les contraintes, puis regénérez.
+        </p>
+      </div>
+      <?php else: ?>
+      <div class="alert alert-success" style="margin-bottom:.75rem">
+        <span class="material-icons-round">check_circle</span>
+        <div class="alert-content"><strong>Couverture complète.</strong> Toutes les heures prévues ont été planifiées.</div>
+      </div>
+      <?php endif; ?>
+
       <div style="display:flex;gap:.75rem;margin-top:1rem">
         <a href="<?= APP_URL ?>/admin/suivi_validations.php" class="btn btn-primary">
           <span class="material-icons-round">fact_check</span> Suivre les validations

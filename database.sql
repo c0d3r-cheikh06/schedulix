@@ -182,6 +182,30 @@ CREATE TABLE IF NOT EXISTS `notifications` (
     FOREIGN KEY (`id_utilisateur`) REFERENCES `utilisateurs` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+CREATE TABLE IF NOT EXISTS `volume_horaire` (
+  `id`                INT(11) NOT NULL AUTO_INCREMENT,
+  `id_classe`         INT(11) NOT NULL,
+  `id_matiere`        INT(11) NOT NULL,
+  `nb_heures_semaine` INT(11) NOT NULL DEFAULT 1,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_vh_classe_mat` (`id_classe`,`id_matiere`),
+  FOREIGN KEY (`id_classe`)  REFERENCES `classes`  (`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`id_matiere`) REFERENCES `matieres` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS `affectations` (
+  `id`            INT(11) NOT NULL AUTO_INCREMENT,
+  `id_classe`     INT(11) NOT NULL,
+  `id_matiere`    INT(11) NOT NULL,
+  `id_professeur` INT(11) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_affectation` (`id_classe`,`id_matiere`,`id_professeur`),
+  FOREIGN KEY (`id_classe`)     REFERENCES `classes`      (`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`id_matiere`)    REFERENCES `matieres`     (`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`id_professeur`) REFERENCES `utilisateurs` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+
 INSERT INTO `niveaux` (`id`,`nom`,`ordre`,`description`) VALUES
 (1,'Sixieme',  1, NULL),
 (2,'Cinquieme',2, NULL),
